@@ -18,8 +18,8 @@ CREATE FUNCTION analytics.reporting_date() RETURNS DATE
 LANGUAGE sql STABLE AS $$
     SELECT (GREATEST(
               (SELECT max(appointment_time) FROM hospital.appointments),
-              (SELECT max(admitted_at)      FROM hospital.admissions),
-              (SELECT max(discharged_at)    FROM hospital.admissions)))::DATE + 1
+              (SELECT max(admitted_at)      FROM inpatient.admissions),
+              (SELECT max(discharged_at)    FROM inpatient.admissions)))::DATE + 1
 $$;
 
 
@@ -58,7 +58,7 @@ WITH stays AS (
            ROW_NUMBER()          OVER w AS stay_number,
            LAG(m.discharged_at)  OVER w AS previous_discharge,
            LEAD(m.admitted_at)   OVER w AS next_admission
-    FROM hospital.admissions m
+    FROM inpatient.admissions m
     JOIN hospital.appointments a ON a.appointment_id = m.appointment_id
     WINDOW w AS (PARTITION BY a.patient_id ORDER BY m.admitted_at)
 )
@@ -85,7 +85,7 @@ SELECT s.admission_id,
         AND s.discharged_at + INTERVAL '30 days' <= analytics.reporting_date())   AS eligible_index_stay
 FROM stays s
 JOIN hospital.patients    p  ON p.patient_id     = s.patient_id
-JOIN hospital.wards       w  ON w.ward_id        = s.ward_id
+JOIN inpatient.wards       w  ON w.ward_id        = s.ward_id
 JOIN hospital.departments dp ON dp.department_id = w.department_id;
 
 
@@ -119,7 +119,7 @@ GROUP BY department_id, department;
 -- of D and not yet discharged at the end of D.
 CREATE VIEW analytics.v_ward_daily_occupancy AS
 WITH days AS (
-    SELECT generate_series((SELECT min(admitted_at)::DATE FROM hospital.admissions),
+    SELECT generate_series((SELECT min(admitted_at)::DATE FROM inpatient.admissions),
                            analytics.reporting_date() - 1, INTERVAL '1 day')::DATE AS census_date
 )
 SELECT w.ward_id,
@@ -130,9 +130,9 @@ SELECT w.ward_id,
        w.bed_capacity,
        count(m.admission_id)                                    AS occupied_beds,
        round(100.0 * count(m.admission_id) / w.bed_capacity, 1) AS occupancy_pct
-FROM hospital.wards w
+FROM inpatient.wards w
 CROSS JOIN days d
-LEFT JOIN hospital.admissions m
+LEFT JOIN inpatient.admissions m
        ON m.ward_id = w.ward_id
       AND m.admitted_at <  d.census_date + 1
       AND (m.discharged_at IS NULL OR m.discharged_at >= d.census_date + 1)
@@ -177,8 +177,8 @@ SELECT w.ward_id,
        p.name                                                    AS patient_name,
        m.admitted_at,
        analytics.reporting_date() - m.admitted_at::DATE          AS days_in_bed
-FROM hospital.admissions m
-JOIN hospital.wards        w ON w.ward_id        = m.ward_id
+FROM inpatient.admissions m
+JOIN inpatient.wards        w ON w.ward_id        = m.ward_id
 JOIN hospital.appointments a ON a.appointment_id = m.appointment_id
 JOIN hospital.patients     p ON p.patient_id     = a.patient_id
 WHERE m.discharged_at IS NULL;

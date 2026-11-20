@@ -9,7 +9,7 @@ reports **healthy** only after every check passes. Analytics views on top of the
 |---|---|
 | **Stack** | PostgreSQL 16.15 · PL/pgSQL · Docker Compose · Python (stdlib, data generation only) |
 | **Source** | `hospital_data_10000_rows.csv` (4,000 rows × 30 columns, 7 entities side by side) · `doctor_credentials.csv` |
-| **Target** | 9 normalized tables (3NF) + `auth`, `etl`, `analytics` schemas |
+| **Target** | 7-table normalized (3NF) core database + 2-table inpatient module, plus `auth`, `etl`, `analytics` schemas |
 | **Records migrated** | 14,441 rows loaded from 15,552 source records (1,111 quarantined, see below) |
 
 ---
@@ -36,7 +36,7 @@ docker exec -it hospital-db psql -U postgres -d hospitaldb
 On first boot (empty volume), `db/init/` runs in order:
 
 ```
-01_schema.sql           9 tables, constraints, schemas
+01_schema.sql           7 core + 2 inpatient tables, constraints, schemas
 02_indexes.sql          strategic indexes
 03_etl.sql              staging tables + etl.run_migration() procedure
 04_business_rules.sql   booking trigger, doctor access, monthly revenue
@@ -59,7 +59,12 @@ reports healthy. The health check passes only once an ETL run has the status `SU
 
 ---
 
-## Schema (9 tables, 3NF)
+## Schema: 7-table core database + inpatient module (3NF)
+
+The **`hospital` schema holds the 7-table core database** migrated from the legacy system, which
+covered outpatient activity only. The **`inpatient` schema** is a 2-table module (wards and
+admissions) for beds and overnight stays. It was added so that occupancy and readmission could be
+analysed, since the legacy extract had no ward data.
 
 ![Hospital Database ERD](./Database%20design.png)
 
@@ -72,8 +77,8 @@ reports healthy. The health check passes only once an ETL run has the status `SU
 | 5 | `hospital.prescriptions` | 2,504 | UNIQUE (appointment, medication) |
 | 6 | `hospital.bills` | 3,099 | amount > 0; `paid` is BOOLEAN |
 | 7 | `hospital.lab_reports` | 1,786 | stored as **JSONB** (was raw text) |
-| 8 | `hospital.wards` | 15 | inpatient module: 10 General + 5 HDU |
-| 9 | `hospital.admissions` | 827 | each stay links to its completed appointment |
+| Inpatient 1 | `inpatient.wards` | 15 | 10 General + 5 HDU wards, each with a bed capacity |
+| Inpatient 2 | `inpatient.admissions` | 827 | each stay links to its completed appointment |
 | – | `auth.doctor_credentials` | 200 | passwords hashed with **bcrypt** (`pgcrypto`), never stored in plaintext |
 
 The legacy extract has no bed data. Wards and admissions come from
@@ -193,7 +198,7 @@ SELECT * FROM analytics.v_readmission_by_ward ORDER BY readmission_rate_pct DESC
 
 These checks run on every deployment, and any failure aborts the start-up:
 
-- There are exactly 9 hospital tables, the ETL run succeeded, and the reference data is complete.
+- There are exactly 7 core tables in `hospital` and 2 in `inpatient`, the ETL run succeeded, and the reference data is complete.
 - **Reconciliation:** for every entity, source rows = loaded + quarantined.
 - No double-bookings, no bills on cancelled visits, no ward over capacity on any day, and no overlapping stays for one patient.
 - The identity sequences continue after the migrated IDs.

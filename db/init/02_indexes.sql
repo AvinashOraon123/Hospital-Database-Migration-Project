@@ -38,8 +38,8 @@ CREATE INDEX ix_lab_report_data    ON hospital.lab_reports USING GIN (report_dat
 -- Reference lookups ----------------------------------------------------------------------
 CREATE INDEX ix_doctors_department ON hospital.doctors (department_id);
 CREATE INDEX ix_patients_phone     ON hospital.patients (phone);         -- front-desk search
-CREATE INDEX ix_wards_department   ON hospital.wards (department_id);
+CREATE INDEX ix_wards_department   ON inpatient.wards (department_id);
 
 -- Inpatient module: occupancy & census -------------------------------------------------------
-CREATE INDEX ix_adm_ward_period    ON hospital.admissions (ward_id, admitted_at, discharged_at);
-CREATE INDEX ix_adm_current        ON hospital.admissions (ward_id) WHERE discharged_at IS NULL;
+CREATE INDEX ix_adm_ward_period    ON inpatient.admissions (ward_id, admitted_at, discharged_at);
+CREATE INDEX ix_adm_current        ON inpatient.admissions (ward_id) WHERE discharged_at IS NULL;

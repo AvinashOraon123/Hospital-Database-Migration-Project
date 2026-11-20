@@ -6,7 +6,7 @@
 -- Seven everyday retrieval tasks are timed on three tiers holding the SAME data:
 --   legacy     : the legacy extract as it arrived (one wide all-text sheet, no indexes)
 --                -> etl.stg_hospital_raw
---   normalized : the 9-table schema with primary keys only (no secondary indexes)
+--   normalized : the 7-table core schema with primary keys only (no secondary indexes)
 --                -> bench_noidx.*  (copy built below)
 --   indexed    : the production schema with the strategic indexes of 02_indexes.sql
 --                -> hospital.*

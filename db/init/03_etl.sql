@@ -5,7 +5,8 @@
 --  TRANSFORM strict typed parsing  +  data-integrity rules implemented with WINDOW
 --            FUNCTIONS (ROW_NUMBER / COUNT OVER).  Every fix is written to
 --            etl.data_quality_log; rejected rows are kept in etl.quarantine.
---  LOAD      truncate + reload the 9 hospital tables in FK order, re-sync identities,
+--  LOAD      truncate + reload the 7 core hospital tables and the 2 inpatient tables in
+--            FK order, re-sync identities,
 --            hash credentials.
 --
 --  Run any time:   CALL etl.run_migration();        (default source dir: /project)
@@ -383,7 +384,7 @@ BEGIN
     -- Bypass the interactive-booking trigger (04_business_rules.sql) for historical rows.
     PERFORM set_config('hospital.etl_mode', 'on', true);
 
-    TRUNCATE hospital.admissions, hospital.wards, hospital.lab_reports, hospital.bills,
+    TRUNCATE inpatient.admissions, inpatient.wards, hospital.lab_reports, hospital.bills,
              hospital.prescriptions, hospital.appointments, hospital.patients,
              hospital.doctors, hospital.departments, auth.doctor_credentials
              RESTART IDENTITY CASCADE;
@@ -395,8 +396,8 @@ BEGIN
     INSERT INTO hospital.prescriptions SELECT prescription_id, appointment_id, medication, dosage FROM w_prescriptions ORDER BY 1;
     INSERT INTO hospital.bills        SELECT bill_id, appointment_id, amount, paid, bill_date FROM w_bills ORDER BY 1;
     INSERT INTO hospital.lab_reports  SELECT report_id, appointment_id, report_data, created_at FROM w_lab_reports ORDER BY 1;
-    INSERT INTO hospital.wards        SELECT ward_id, ward_name, department_id, ward_type, bed_capacity FROM w_wards ORDER BY 1;
-    INSERT INTO hospital.admissions   SELECT admission_id, appointment_id, ward_id, admitted_at, discharged_at FROM w_admissions ORDER BY 1;
+    INSERT INTO inpatient.wards        SELECT ward_id, ward_name, department_id, ward_type, bed_capacity FROM w_wards ORDER BY 1;
+    INSERT INTO inpatient.admissions   SELECT admission_id, appointment_id, ward_id, admitted_at, discharged_at FROM w_admissions ORDER BY 1;
 
     -- Credentials: bcrypt-hash on the way in; plaintext never reaches a permanent table.
     INSERT INTO auth.doctor_credentials (doctor_id, username, password_hash)
@@ -409,19 +410,23 @@ BEGIN
     DECLARE
         r RECORD; v_max INT;
     BEGIN
-        FOR r IN SELECT * FROM (VALUES ('departments','department_id'), ('doctors','doctor_id'),
-                                       ('patients','patient_id'), ('appointments','appointment_id'),
-                                       ('prescriptions','prescription_id'), ('bills','bill_id'),
-                                       ('lab_reports','report_id'), ('wards','ward_id'),
-                                       ('admissions','admission_id')) v(t, c)
+        FOR r IN SELECT * FROM (VALUES ('hospital', 'departments', 'department_id'),
+                                       ('hospital', 'doctors', 'doctor_id'),
+                                       ('hospital', 'patients', 'patient_id'),
+                                       ('hospital', 'appointments', 'appointment_id'),
+                                       ('hospital', 'prescriptions', 'prescription_id'),
+                                       ('hospital', 'bills', 'bill_id'),
+                                       ('hospital', 'lab_reports', 'report_id'),
+                                       ('inpatient', 'wards', 'ward_id'),
+                                       ('inpatient', 'admissions', 'admission_id')) v(s, t, c)
         LOOP
-            EXECUTE format('SELECT max(%I) FROM hospital.%I', r.c, r.t) INTO v_max;
-            PERFORM setval(pg_get_serial_sequence('hospital.' || r.t, r.c), COALESCE(v_max, 1), v_max IS NOT NULL);
+            EXECUTE format('SELECT max(%I) FROM %I.%I', r.c, r.s, r.t) INTO v_max;
+            PERFORM setval(pg_get_serial_sequence(r.s || '.' || r.t, r.c), COALESCE(v_max, 1), v_max IS NOT NULL);
         END LOOP;
     END;
 
     ANALYZE hospital.departments, hospital.doctors, hospital.patients, hospital.appointments,
-            hospital.prescriptions, hospital.bills, hospital.lab_reports, hospital.wards, hospital.admissions;
+            hospital.prescriptions, hospital.bills, hospital.lab_reports, inpatient.wards, inpatient.admissions;
 
     UPDATE etl.etl_run SET
         finished_at = clock_timestamp(),
@@ -434,8 +439,8 @@ BEGIN
             'prescriptions', (SELECT count(*) FROM hospital.prescriptions),
             'bills',         (SELECT count(*) FROM hospital.bills),
             'lab_reports',   (SELECT count(*) FROM hospital.lab_reports),
-            'wards',         (SELECT count(*) FROM hospital.wards),
-            'admissions',    (SELECT count(*) FROM hospital.admissions),
+            'wards',         (SELECT count(*) FROM inpatient.wards),
+            'admissions',    (SELECT count(*) FROM inpatient.admissions),
             'doctor_credentials', (SELECT count(*) FROM auth.doctor_credentials))
     WHERE run_id = v_run;
 

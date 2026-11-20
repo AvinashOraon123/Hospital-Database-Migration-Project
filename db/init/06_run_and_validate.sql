@@ -18,7 +18,11 @@ BEGIN
     -- 1. structure ---------------------------------------------------------------------
     SELECT count(*) INTO v_n FROM information_schema.tables
     WHERE table_schema = 'hospital' AND table_type = 'BASE TABLE';
-    IF v_n <> 9 THEN RAISE EXCEPTION 'VALIDATION: expected 9 hospital tables, found %', v_n; END IF;
+    IF v_n <> 7 THEN RAISE EXCEPTION 'VALIDATION: expected 7 core hospital tables, found %', v_n; END IF;
+
+    SELECT count(*) INTO v_n FROM information_schema.tables
+    WHERE table_schema = 'inpatient' AND table_type = 'BASE TABLE';
+    IF v_n <> 2 THEN RAISE EXCEPTION 'VALIDATION: expected 2 inpatient tables, found %', v_n; END IF;
 
     -- 2. run status ----------------------------------------------------------------------
     IF (SELECT status FROM etl.etl_run WHERE run_id = v_run) <> 'SUCCEEDED' THEN
@@ -28,7 +32,7 @@ BEGIN
     -- 3. reference-data completeness ----------------------------------------------------
     IF (SELECT count(*) FROM hospital.departments) <> 10  THEN RAISE EXCEPTION 'VALIDATION: departments <> 10'; END IF;
     IF (SELECT count(*) FROM hospital.doctors)     <> 200 THEN RAISE EXCEPTION 'VALIDATION: doctors <> 200'; END IF;
-    IF (SELECT count(*) FROM hospital.wards)       <> 15  THEN RAISE EXCEPTION 'VALIDATION: wards <> 15'; END IF;
+    IF (SELECT count(*) FROM inpatient.wards)       <> 15  THEN RAISE EXCEPTION 'VALIDATION: wards <> 15'; END IF;
     IF (SELECT count(*) FROM auth.doctor_credentials) <> (SELECT count(*) FROM hospital.doctors) THEN
         RAISE EXCEPTION 'VALIDATION: every doctor must have credentials';
     END IF;
@@ -41,7 +45,7 @@ BEGIN
             ('prescriptions', (SELECT count(*) FROM etl.stg_hospital_raw WHERE trim(rx_id)   <> ''), (SELECT count(*) FROM hospital.prescriptions)),
             ('bills',         (SELECT count(*) FROM etl.stg_hospital_raw WHERE trim(bill_id) <> ''), (SELECT count(*) FROM hospital.bills)),
             ('lab_reports',   (SELECT count(*) FROM etl.stg_hospital_raw WHERE trim(lab_id)  <> ''), (SELECT count(*) FROM hospital.lab_reports)),
-            ('admissions',    (SELECT count(*) FROM etl.stg_admissions),                             (SELECT count(*) FROM hospital.admissions))
+            ('admissions',    (SELECT count(*) FROM etl.stg_admissions),                             (SELECT count(*) FROM inpatient.admissions))
         ) t(entity, source_rows, loaded_rows)
     LOOP
         SELECT count(*) INTO v_n FROM etl.quarantine WHERE run_id = v_run AND entity = r.entity;
@@ -64,8 +68,8 @@ BEGIN
     SELECT count(*) INTO v_n FROM analytics.v_ward_daily_occupancy WHERE occupied_beds > bed_capacity;
     IF v_n > 0 THEN RAISE EXCEPTION 'VALIDATION: ward over capacity on % ward-days', v_n; END IF;
 
-    SELECT count(*) INTO v_n FROM hospital.admissions m1 JOIN hospital.appointments a1 USING (appointment_id)
-    JOIN hospital.admissions m2 ON m2.admission_id > m1.admission_id
+    SELECT count(*) INTO v_n FROM inpatient.admissions m1 JOIN hospital.appointments a1 USING (appointment_id)
+    JOIN inpatient.admissions m2 ON m2.admission_id > m1.admission_id
     JOIN hospital.appointments a2 ON a2.appointment_id = m2.appointment_id AND a2.patient_id = a1.patient_id
     WHERE m1.admitted_at < COALESCE(m2.discharged_at, 'infinity') AND m2.admitted_at < COALESCE(m1.discharged_at, 'infinity');
     IF v_n > 0 THEN RAISE EXCEPTION 'VALIDATION: % overlapping stays for the same patient', v_n; END IF;
