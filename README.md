@@ -12,6 +12,12 @@ reports **healthy** only after every check passes. Analytics views on top of the
 | **Target** | 7-table normalized (3NF) core database + 2-table inpatient module, plus `auth`, `etl`, `analytics` schemas |
 | **Records migrated** | 14,441 rows loaded from 15,552 source records (1,111 quarantined, see below) |
 
+## Database design
+
+![HospitalDB entity relationship diagram: 7-table core database, inpatient module and auth](./database_design.png)
+
+*Blue: the 7-table core database (`hospital`). Green: the inpatient module (`inpatient`). Grey: credentials (`auth`).*
+
 ---
 
 ## Project phases
@@ -66,7 +72,7 @@ covered outpatient activity only. The **`inpatient` schema** is a 2-table module
 admissions) for beds and overnight stays. It was added so that occupancy and readmission could be
 analysed, since the legacy extract had no ward data.
 
-![Hospital Database ERD](./Database%20design.png)
+The full diagram is at the top of this page ([Database design](#database-design)).
 
 | # | Table | Rows | Notes |
 |---|---|---|---|
