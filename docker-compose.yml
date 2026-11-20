@@ -1,0 +1,32 @@
+# One command builds the whole system:   docker compose up -d
+# First start on an empty volume runs db/init/*.sql in order:
+#   01 schema -> 02 indexes -> 03 ETL procedure -> 04 business rules -> 05 views -> 06 run ETL + validate
+# The container only reports "healthy" once an ETL run has SUCCEEDED and validation passed.
+name: hospital-db
+
+services:
+  db:
+    image: postgres:16.15            # pinned minor version -> identical engine on every machine
+    container_name: hospital-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hospitaldb}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./db/init:/docker-entrypoint-initdb.d:ro   # schema + ETL + validation, run once on first boot
+      - ./:/project:ro                             # source CSVs + benchmark scripts (read-only)
+      - pgdata:/var/lib/postgresql/data            # persisted database files
+    healthcheck:
+      test: ["CMD-SHELL", "psql -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\" -tAc \"SELECT 1 FROM etl.etl_run WHERE status = 'SUCCEEDED' LIMIT 1\" | grep -q 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+volumes:
+  pgdata:

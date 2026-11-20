@@ -1,0 +1,16 @@
+WardID,WardName,DepartmentID,WardType,BedCapacity
+1,Ward 1A - General,1,General,20
+2,Ward 1B - HDU,1,HDU,8
+3,Ward 2A - General,2,General,18
+4,Ward 3A - General,3,General,16
+5,Ward 3B - HDU,3,HDU,6
+6,Ward 4A - General,4,General,18
+7,Ward 5A - General,5,General,14
+8,Ward 6A - General,6,General,20
+9,Ward 6B - HDU,6,HDU,8
+10,Ward 7A - General,7,General,14
+11,Ward 8A - General,8,General,16
+12,Ward 8B - HDU,8,HDU,6
+13,Ward 9A - General,9,General,14
+14,Ward 10A - General,10,General,18
+15,Ward 10B - HDU,10,HDU,8
